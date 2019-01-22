@@ -23,13 +23,14 @@ namespace ExperienceGenerator.Client.Controllers
     {
         private readonly GeoDataRepository _getDataRepository;
         private readonly SiteRepository _siteRepository;
+        private readonly TestRepository _testRepository;
 
         public ExperienceGeneratorActionsController()
         {
             _siteRepository = new SiteRepository();
             _getDataRepository = new GeoDataRepository();
+            _testRepository = new TestRepository();
         }
-
 
         [HttpGet]
         public IEnumerable<SiteInfo> Websites(bool all = false)
@@ -48,7 +49,7 @@ namespace ExperienceGenerator.Client.Controllers
         public IEnumerable<ItemInfo> Items(string query, int? maxDepth = null, string language = null)
         {
             var db = Database.GetDatabase("web");
-            
+
             foreach (var item in db.SelectItems(query))
             {
                 Language itemLanguage = null;
@@ -66,16 +67,16 @@ namespace ExperienceGenerator.Client.Controllers
         public ConfigurationOptions Options()
         {
             var options = new ConfigurationOptions
-                          {
-                              TrackerIsEnabled = !Settings.GetBoolSetting("ExperienceGenerator.DistributedEnvironment", false),
-                              Websites = _siteRepository.ValidSites.Select(s => new SelectionOption
-                                                                     {
-                                                                         Id = s.Id,
-                                                                         Label = s.Label,
-                                                                         DefaultWeight = s.Id == "website" ? 100 : 50
-                                                                     }).ToList(),
-                              LocationGroups = Locations()
-                          };
+            {
+                TrackerIsEnabled = !Settings.GetBoolSetting("ExperienceGenerator.DistributedEnvironment", false),
+                Websites = _siteRepository.ValidSites.Select(s => new SelectionOption
+                {
+                    Id = s.Id,
+                    Label = s.Label,
+                    DefaultWeight = s.Id == "website" ? 100 : 50
+                }).ToList(),
+                LocationGroups = Locations()
+            };
 
 
             var db = Database.GetDatabase("master");
@@ -84,67 +85,67 @@ namespace ExperienceGenerator.Client.Controllers
             options.Version = "0.1";
 
             options.ChannelTypes = channels.Children.Where(x => x.TemplateID == ChanneltypeItem.TemplateID).Select(x => new OptionTypes
-                                                                                                                        {
-                                                                                                                            Type = x.DisplayName,
-                                                                                                                            OptionGroups = SelectChannelGroups(x)
-                                                                                                                        }).ToList();
+            {
+                Type = x.DisplayName,
+                OptionGroups = SelectChannelGroups(x)
+            }).ToList();
             var outcomes = db.GetItem(KnownItems.OutcomesRoot);
             var taxonomyRoot = db.GetItem(KnownItems.TaxonomyRoot);
 
             var outcomeGroups = outcomes.Axes.GetDescendants().Where(c => c.TemplateID == OutcomeDefinitionItem.TemplateID).GroupBy(x => string.IsNullOrEmpty(x["Group"]) ? ID.Null : new ID(x["Group"]), x => x);
 
             options.OutcomeGroups = taxonomyRoot.Axes.GetDescendants().Where(c => c.TemplateID == OutcomegroupItem.TemplateID).Select(cg => new SelectionOptionGroup
-                                                                                                                                            {
-                                                                                                                                                Label = cg.Name,
-                                                                                                                                                Options = outcomeGroups.Where(c => c.Key == cg.ID).SelectMany(x => x).Select(c => new SelectionOption
-                                                                                                                                                                                                                                  {
-                                                                                                                                                                                                                                      Id = c.ID.ToString(),
-                                                                                                                                                                                                                                      Label = c.Name,
-                                                                                                                                                                                                                                      DefaultWeight = 5
-                                                                                                                                                                                                                                  }).OrderBy(item => item.Label).ToList()
-                                                                                                                                            }).ToList();
+            {
+                Label = cg.Name,
+                Options = outcomeGroups.Where(c => c.Key == cg.ID).SelectMany(x => x).Select(c => new SelectionOption
+                {
+                    Id = c.ID.ToString(),
+                    Label = c.Name,
+                    DefaultWeight = 5
+                }).OrderBy(item => item.Label).ToList()
+            }).ToList();
 
             var outcomesWithoutGroup = outcomeGroups.Where(c => c.Key == ID.Null).SelectMany(x => x).Select(c => new SelectionOption
-                                                                                                                 {
-                                                                                                                     Id = c.ID.ToString(),
-                                                                                                                     Label = c.Name,
-                                                                                                                     DefaultWeight = 5
-                                                                                                                 }).OrderBy(item => item.Label).ToList();
+            {
+                Id = c.ID.ToString(),
+                Label = c.Name,
+                DefaultWeight = 5
+            }).OrderBy(item => item.Label).ToList();
             if (outcomesWithoutGroup.Any())
             {
                 options.OutcomeGroups.Add(new SelectionOptionGroup
-                                          {
-                                              Label = "None",
-                                              Options = outcomesWithoutGroup
-                                          });
+                {
+                    Label = "None",
+                    Options = outcomesWithoutGroup
+                });
             }
 
             var campaigns = db.GetItem(KnownItems.CampaignsRoot);
             options.Campaigns = campaigns.Axes.GetDescendants().Where(item => item.TemplateID == CampaignItem.TemplateID).Select(item => new SelectionOption
-                                                                                                                                         {
-                                                                                                                                             Id = item.ID.ToString(),
-                                                                                                                                             Label = item.Paths.FullPath.Substring(campaigns.Paths.FullPath.Length + 1),
-                                                                                                                                             DefaultWeight = 10
-                                                                                                                                         }).OrderBy(e => e.Label).ToList();
+            {
+                Id = item.ID.ToString(),
+                Label = item.Paths.FullPath.Substring(campaigns.Paths.FullPath.Length + 1),
+                DefaultWeight = 10
+            }).OrderBy(e => e.Label).ToList();
 
             options.OrganicSearch = SearchEngine.SearchEngines.Where(e => !e.Ppc).Select(e => new SelectionOption
-                                                                                              {
-                                                                                                  Id = e.Id,
-                                                                                                  Label = e.Label
-                                                                                              }).ToList();
+            {
+                Id = e.Id,
+                Label = e.Label
+            }).ToList();
 
             options.PpcSearch = SearchEngine.SearchEngines.Where(e => e.Ppc).Select(e => new SelectionOption
-                                                                                         {
-                                                                                             Id = e.Id,
-                                                                                             Label = e.Label
-                                                                                         }).ToList();
+            {
+                Id = e.Id,
+                Label = e.Label
+            }).ToList();
 
             options.Languages = Context.Database.GetLanguages().Select(x => new SelectionOption
-                                                                            {
-                                                                                DefaultWeight = 50,
-                                                                                Label = x.CultureInfo.DisplayName,
-                                                                                Id = x.Name
-                                                                            }).ToList();
+            {
+                DefaultWeight = 50,
+                Label = x.CultureInfo.DisplayName,
+                Id = x.Name
+            }).ToList();
             if (options.Languages.Count == 1)
             {
                 options.Languages[0].DefaultWeight = 100;
@@ -157,29 +158,29 @@ namespace ExperienceGenerator.Client.Controllers
         public List<SelectionOptionGroup> Locations()
         {
             return _getDataRepository.Continents.Select(continent => new SelectionOptionGroup
-                                                                     {
-                                                                         Label = continent.Name,
-                                                                         Options = continent.SubContinents.Select(x => new SelectionOption
-                                                                                                                       {
-                                                                                                                           Id = x.Code,
-                                                                                                                           Label = x.Name,
-                                                                                                                           DefaultWeight = 50
-                                                                                                                       })
-                                                                     }).ToList();
+            {
+                Label = continent.Name,
+                Options = continent.SubContinents.Select(x => new SelectionOption
+                {
+                    Id = x.Code,
+                    Label = x.Name,
+                    DefaultWeight = 50
+                })
+            }).ToList();
         }
 
         private static IEnumerable<SelectionOptionGroup> SelectChannelGroups(Item channelsRoot)
         {
             return channelsRoot.Children.Where(c => c.TemplateID == ChannelgroupItem.TemplateID).Select(cg => new SelectionOptionGroup
-                                                                                                              {
-                                                                                                                  Label = cg.Name,
-                                                                                                                  Options = cg.Children.Where(c => c.TemplateID == ChannelItem.TemplateID).Select(c => new SelectionOption
-                                                                                                                                                                                                       {
-                                                                                                                                                                                                           Id = c.ID.ToString(),
-                                                                                                                                                                                                           Label = c.Name,
-                                                                                                                                                                                                           DefaultWeight = c.Name == "Direct" ? 50 : 0
-                                                                                                                                                                                                       }).OrderBy(item => item.Label).ToList()
-                                                                                                              }).ToList();
+            {
+                Label = cg.Name,
+                Options = cg.Children.Where(c => c.TemplateID == ChannelItem.TemplateID).Select(c => new SelectionOption
+                {
+                    Id = c.ID.ToString(),
+                    Label = c.Name,
+                    DefaultWeight = c.Name == "Direct" ? 50 : 0
+                }).OrderBy(item => item.Label).ToList()
+            }).ToList();
         }
 
         [HttpPost]
@@ -188,9 +189,9 @@ namespace ExperienceGenerator.Client.Controllers
             var repo = new SettingsRepository();
             repo.Save(preset.Name, preset.Spec);
             return Json(new
-                        {
-                            message = "ok"
-                        });
+            {
+                message = "ok"
+            });
         }
 
         [HttpGet]
@@ -198,9 +199,9 @@ namespace ExperienceGenerator.Client.Controllers
         {
             var repo = new SettingsRepository();
             return Json(new
-                        {
-                            query = repo.GetPresetsQuery()
-                        });
+            {
+                query = repo.GetPresetsQuery()
+            });
         }
 
         [HttpGet]
@@ -224,9 +225,9 @@ namespace ExperienceGenerator.Client.Controllers
 
             repo.Save(preset.Name, preset.Spec);
             return Json(new
-                        {
-                            message = "ok"
-                        });
+            {
+                message = "ok"
+            });
         }
 
         [HttpGet]
@@ -248,6 +249,11 @@ namespace ExperienceGenerator.Client.Controllers
             return new GeoDataRepository().CitiesByCountry(id);
         }
 
+        [HttpGet]
+        public List<TestItem> ActiveTests()
+        {
+            return _testRepository.GetActiveTests();
+        }
 
         [HttpPost]
         public IHttpActionResult StopAll()
